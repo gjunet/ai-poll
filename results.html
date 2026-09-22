@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Poll results: How do you use AI?</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="qrcode.js"></script>
+</head>
+<body class="results-body">
+  <div class="demo-banner" id="demo">Demo mode: showing votes from this browser only until Firebase is set up.</div>
+
+  <header class="results-head">
+    <div>
+      <p class="eyebrow">Poll: live results</p>
+      <h1 id="question">How do you use AI in your work now?</h1>
+    </div>
+    <div class="qr-box" aria-label="Scan to vote">
+      <div id="qr"></div>
+      <div class="url" id="vote-url"></div>
+    </div>
+  </header>
+
+  <section class="bars" id="bars" aria-live="polite"></section>
+
+  <footer class="results-foot">
+    <img src="umb-ssw-logo.png" alt="University of Maryland School of Social Work">
+    <span><span class="live-dot" id="dot"></span><span id="conn">Connecting</span></span>
+    <span class="total"><strong id="total">0</strong> responses</span>
+  </footer>
+
+  <script type="module">
+    import { CHOICES, watchResults, isDemo } from "./poll.js";
+
+    if (isDemo) document.getElementById("demo").classList.add("show");
+
+    // QR code pointing at the vote page in this same folder, keeping any ?poll= name.
+    const voteUrl = new URL("./", location.href);
+    voteUrl.search = location.search;
+    const shown = voteUrl.href.replace(/^https?:\/\//, "").replace(/\/$/, "");
+    document.getElementById("vote-url").textContent = shown;
+    if (window.qrcode) {
+      const qr = qrcode(0, "M");
+      qr.addData(voteUrl.href);
+      qr.make();
+      document.getElementById("qr").innerHTML = qr.createSvgTag({ cellSize: 8, margin: 0, scalable: true });
+    }
+
+    // Build one row per choice.
+    const bars = document.getElementById("bars");
+    const rows = {};
+    for (const c of CHOICES) {
+      const row = document.createElement("div");
+      row.className = "bar-row";
+      row.innerHTML = `<div class="bar-label"></div><div class="bar-track"><div class="bar-fill"></div></div><div class="bar-value"></div>`;
+      row.querySelector(".bar-label").textContent = c.label;
+      bars.appendChild(row);
+      rows[c.id] = row;
+    }
+
+    function update(counts, total) {
+      document.getElementById("total").textContent = total;
+      const max = Math.max(1, ...Object.values(counts));
+      for (const c of CHOICES) {
+        const n = counts[c.id];
+        const pct = total ? Math.round((100 * n) / total) : 0;
+        const row = rows[c.id];
+        row.querySelector(".bar-fill").style.width = (100 * n / max) + "%";
+        row.querySelector(".bar-value").innerHTML = `${n}<small>${pct}%</small>`;
+        row.classList.toggle("lead", n > 0 && n === max);
+      }
+    }
+
+    const dot = document.getElementById("dot");
+    const conn = document.getElementById("conn");
+    function status(s) {
+      const text = { live: "Live", offline: "Reconnecting", error: "Cannot read results", demo: "Demo mode" }[s] || s;
+      conn.textContent = text;
+      dot.classList.toggle("on", s === "live" || s === "demo");
+    }
+
+    watchResults(update, status).catch(e => { console.error(e); status("error"); });
+  </script>
+</body>
+</html>
